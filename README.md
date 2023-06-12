@@ -1,5 +1,5 @@
 ## LiBaC
-This is a repository for our implementation of a novel method of clustering sites in a codon alignment according to their evolutionary dynamics.  The method, called LiBaC, is a type of model based clustering (MBC) carried out under the posterior distribution of models for different evolutionary processes. The code is derived from the codeml program written by Ziheng Yang. LiBaC was coded by Bao Le.
+This is a repository for our implementation of a novel method for clustering sites in a codon alignment according to their evolutionary dynamics.  The method, called LiBaC, is a type of model based clustering (MBC) carried out under the posterior distribution of models for different evolutionary processes. The code is derived from the codeml program written by Ziheng Yang. LiBaC was coded by Bao Le.
 
 The paper describing the method is:
 
