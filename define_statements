@@ -1,0 +1,39 @@
+#define square(a) ((a)*(a))
+#define FOR(i,n) for(i=0; i<n; i++)
+#define FPN(file) fputc('\n', file)
+#define F0 stdout
+#define min2(a,b) ((a)<(b)?(a):(b))
+#define max2(a,b) ((a)>(b)?(a):(b))
+#define PI 3.141592653
+
+#define beep putchar('\a')
+#define spaceming2(n) ((n)*((n)*2+9+2)*(int)sizeof(double))
+
+#define rnduab(a,b) ((a)+((b)-(a))*rndu())
+
+#define rndexp(mean) (-(mean)*log(rndu()))
+
+#define PointGamma(prob,alpha,beta) PointChi2(prob,2.0*(alpha))/(2.0*(beta))
+
+#define CDFGamma(x,alpha,beta) IncompleteGamma((beta)*(x),alpha,LnGamma(alpha))
+
+#define CDF_IGamma(x,alpha,beta) (1-CDFGamma(1/(x),alpha,beta))
+#define CDFChi2(x,v) CDFGamma(x,(v)/2.0,0.5)
+
+libac.c
+#define NP            (NBRANCH*2+NGENE-1+2)
+
+#define E1N(m,s) (s/sqrt(PI*2)*exp(-square((1-m)/s)/2)+m*(1-CDFNormal((1-m)/s)))
+
+tools.c
+#define SIGN(a,b) ((b) >= 0.0 ? fabs(a) : -fabs(a))
+
+#define MAXNF2D  5
+#define SQRT5    2.2360679774997896964
+#define Epanechnikov(t) ((0.75-0.15*(t)*(t))/SQRT5)
+
+treesub.c
+#define gammap(x,alpha) (alpha*(1-pow(x,-1/alpha)))
+
+#define hdID(i,j) (max2(i,j)*(max2(i,j)-1)/2+min2(i,j))
+

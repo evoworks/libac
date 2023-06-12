@@ -1,0 +1,21 @@
+Error d:\projects\le_libac\libac_code\treesub.c: 1153  syntax error; found `*' expecting ')'
+Error d:\projects\le_libac\libac_code\treesub.c: 1153  skipping `*' `fout' `,'
+Error d:\projects\le_libac\libac_code\treesub.c: 1153  missing identifier
+Error d:\projects\le_libac\libac_code\treesub.c: 1153  Syntax error; missing semicolon before  `int'
+Error d:\projects\le_libac\libac_code\treesub.c: 1153  missing identifier
+Error d:\projects\le_libac\libac_code\treesub.c: 1153  Syntax error; missing semicolon before  `int'
+Error d:\projects\le_libac\libac_code\treesub.c: 1153  missing identifier
+Error d:\projects\le_libac\libac_code\treesub.c: 1153  Syntax error; missing semicolon before  `int'
+Error d:\projects\le_libac\libac_code\treesub.c: 1153  Syntax error; missing semicolon before  `)'
+Error d:\projects\le_libac\libac_code\treesub.c: 1153  skipping `)' `{'
+Error d:\projects\le_libac\libac_code\treesub.c: 1162  undeclared identifier 'com'
+Error d:\projects\le_libac\libac_code\treesub.c: 1162  left operand of . has incompatible type 'int'
+Error d:\projects\le_libac\libac_code\treesub.c: 1162  left operand of . has incompatible type 'int'
+Error d:\projects\le_libac\libac_code\treesub.c: 1163  left operand of . has incompatible type 'int'
+Error d:\projects\le_libac\libac_code\treesub.c: 1163  undeclared identifier 'CODONseq'
+Error d:\projects\le_libac\libac_code\treesub.c: 1163  declared parameter 'CODONseq' is missing
+Error d:\projects\le_libac\libac_code\treesub.c: 1163  declared parameter 'nb' is missing
+Error d:\projects\le_libac\libac_code\treesub.c: 1162  declared parameter 'str' is missing
+Error d:\projects\le_libac\libac_code\treesub.c: 1162  declared parameter 'com' is missing
+Error d:\projects\le_libac\libac_code\treesub.c: 1162  declared parameter 'pch' is missing
+Error d:\projects\le_libac\libac_code\treesub.c: 1161  too many errors

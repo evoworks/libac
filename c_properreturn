@@ -1,0 +1,1148 @@
+/////////////////////////////////////
+   global_control[0]=1;  // 1: estimate
+   global_control[1]=1;  // if 1 then opens option.txt file
+   global_control[2]=0;  //1: fix branch
+   global_control[3]=1;  //1: soft
+   global_control[4]=0;  //1: fix initial partition
+   global_lnL_max=-500000;
+   global_iteration=10000;
+   global_k=2;
+   global_model[0]=1;
+   global_model[1]=1;
+   global_model[2]=1;
+
+   fparameter=gfopen("parameter.txt","w");
+   frandom=gfopen("random.txt","w");
+   fpower=gfopen("power","w");
+   fgap=gfopen("gap.txt","w");
+
+   if (global_control[1])
+   {
+   	 fp=gfopen("option.txt","r");
+   	 for (i=0;i<200;i++)
+   	 	fscanf(fp,"%d", &global_power[i]);
+    fclose(fp);
+   }
+
+   global_c=1;
+   global_k=global_power[0];
+   global_control[3]=global_power[1];  //1: soft
+   global_control[4]=global_power[3];  //1: fix initial partition
+/////////////////////////////////////
+   
+#ifdef NSSITESBandits
+   atexit(finishup);
+#endif
+   starttime();
+   com.ndata=1;
+   noisy=0;           com.runmode=0;
+   com.clock=0;       com.fix_rgene=0; /* 0: estimate rate factors for genes */
+   com.cleandata=0;  /* 1: delete; 0:use missing data */
+   com.seqtype=AAseq;
+   com.model=Empirical_F;  strcpy(com.daafile, "jones.dat");
+   com.icode=0;       com.nrate=0;
+   com.fix_kappa=0;   com.kappa=1;    com.omega=2.1;
+   com.fix_alpha=1;   com.alpha=0.;   com.ncatG=4;   /* alpha=0 := inf */
+   com.fix_rho=1;     com.rho=0.;
+   com.getSE=0;       com.print=0;    com.verbose=1;  com.fix_blength=0;
+   com.method=0;      com.space=NULL;
+   com.pf3x4MG=com.f3x4MG[0];
+
+/////////////////////////////////////////////
+
+    global_count=5;
+    global_stop=5;
+    global_count2=100000;
+
+for (global_time=0;global_time<40 ;global_time++)
+{
+   frub=gfopen("rub","a");   frst=gfopen("rst","w");  frst1=gfopen("rst1","w");
+//////////////////////////////////////////////
+
+/*
+mergeSeqs(frst);  exit(0);
+Ina();
+*/
+   seed = 4*(int)time(NULL)+1;
+   SetSeed(seed);
+
+#if (DSDN_MC || DSDN_MC_SITES)
+   SimulateData2s61();
+#endif
+
+   if(argc>1) strcpy(ctlf,argv[1]);
+   	  GetOptions(ctlf);
+
+   if(com.runmode!=-2) 
+       finitials=fopen("in.codeml","r");
+
+   fprintf(frst, "Supplemental results for CODEML (seqf: %s  treef: %s)\n", com.seqf, com.treef);
+
+   printf("%s in %s\n",seqtypestr[com.seqtype-1],VerStr);
+   fout=gfopen(com.outf, "w");
+
+#if(!RELEASE)
+   fprintf(fout, "\nseed used = %d\n", seed);
+#endif
+
+   if(noisy && com.seqtype==CODONseq) 
+   { 
+       printcu(F0,NULL,com.icode); 
+       puts("Nice code, uuh?"); 
+   }
+
+   /* space for P&U&V&Root */
+   if(com.clock==5 || com.clock==6)
+      DatingHeteroData(fout);
+
+   nUVR=1; nc=20;
+   if(com.seqtype==1) 
+   { 
+       nc=64; 
+       if(com.model>=1) 
+           nUVR=6; 
+   }
+   else if (com.seqtype==CODONseq||com.model==FromCodon) 
+       nc=64;
+
+   GetMemPUVR(nc, nUVR);
+
+   if((fseq=fopen(com.seqf,"r"))==NULL || com.seqf[0]=='\0')
+   {
+      printf ("\n\nSequence file %s not found!\n", com.seqf);
+      exit (-1);
+   }
+
+   /* d4dSdN(fout); */
+   if (com.aaDist==AAClasses) 
+   {
+      SetAA1STEP();
+      GetOmegaAA(OmegaAA);
+   }
+   else if (com.seqtype==AAseq && com.model==REVaa_0)
+      SetAA1STEP();
+
+   if(com.seqtype==1) 
+   {
+      for(i=0; i<3; i++) 
+         fpair[i]=(FILE*)gfopen(pairfs[i],"w");
+      if(com.runmode==-2)
+         for(; i<6;i++) fpair[i]=(FILE*)gfopen(pairfs[i],"w");
+   }
+   else if(com.runmode==-2)
+      fpair[0]=(FILE*)gfopen("2AA.t","w");
+
+   for (idata=0; idata<com.ndata; idata++) 
+   {
+      if (com.ndata>1) 
+      {
+         printf ("\n\nData set %d\n", idata+1);
+         fprintf (fout, "\n\nData set %d\n", idata+1);
+         fprintf(frst,"\t%d",idata+1);
+         fprintf(frst1, "%4d", idata+1);
+      }
+
+      if(idata)  
+          GetOptions(ctlf); /* Is this necessary? */
+
+      if(nnsmodels>1) 
+      {
+         if(com.fix_omega) 
+            error2("fix omega during batch run?");
+         if(com.model) 
+            error2("model should be 0 in the batch run?");
+         if(com.runmode) 
+            error2("runmode?");
+         com.NSsites=NSbetaw;  
+         com.ncatG=ncatG0+1;
+         printf("NSsites batch run (ncatG as in YNGP2000): ");
+         for(i=0; i<nnsmodels; i++) 
+            printf(" %2d", nsmodels[i]); 
+         FPN(F0);
+      }
+
+/////////////////////////////////////////
+      for(i=0;i<500;i++)
+      com.z[i]=0;
+
+      printf( "Mgene %d NSsite %d ncat.G %d\n",com.Mgene, com.NSsites, com.ncatG); 
+      if (global_time==0) 
+      {
+         if (global_control[4]==1) 
+         {
+            com.Mgene=3;
+            com.NSsites=0;
+         }
+        else 
+        {
+            com.Mgene=0;
+            com.NSsites=3;
+         }
+         global_power[0]=com.ncatG; 
+         global_k=global_power[0];
+      }
+      printf("Mgene %d NSsite %d ncat.G %d\n",com.Mgene, com.NSsites, com.ncatG); 
+
+      if (global_time==1) 
+      {  
+         com.Mgene=3;
+         com.NSsites=0;
+      }
+
+      if (global_time>1)  
+      {  
+         com.Mgene=5-global_power[2];
+         com.NSsites=0;
+      }
+
+////////////////////////////////////////
+
+      if (com.readpattf) 
+      {
+         if (com.Mgene) 
+            error2("Mgene & readpattf incompatible.");
+         ReadPatternFreq (fout, com.seqf);
+      }
+      else
+         ReadSeq((com.verbose?fout:NULL),fseq); /*may change seqtype*/
+
+////////////////////////////////////////////////////////////////////////////////////
+
+      if (global_time>1)
+         for (i=0;i<com.ls;i++)
+            com.pose[i]=global_site[2][i]; // fix the site class labels with the ones we get from last iteration
+
+      for (j=0;j<global_k;j++)
+      {
+          global_Pi[j]=0;  // global_Pi[0..k-1] made 0 ???
+          for (i=0;i<com.npatt;i++)
+               global_Pi[j]=global_Pi[j]+global_z[j][i]*com.fpatt[i];  // value set to
+
+          global_Pi1[j]=0; // zero the pi1
+          for (i=0;i<com.ls;i++)
+          {
+              if (com.pose[i]==j)
+                 global_Pi1[j]=global_Pi1[j]+1;
+          }
+      }
+
+      if (global_time>1)
+      {
+         for (j=0;j<global_k;j++)
+             for (i=0;i<com.npatt;i++)
+                 global_z1[j][i]=global_z[j][i];
+         for(i=0; i<com.ls; i++)
+             for(global_ig=0; global_ig<global_k; global_ig++)
+                 global_z[global_ig][com.pose[i]]=global_posterior[global_ig][i];
+      }
+      if (global_time==0)
+		  for (i=0;i<com.ls;i++) 
+      		global_initial[i]=com.pose[i];  //  store the initial site class labels
+
+      for (i=0;i<com.ls;i++)
+      	  global_site[1][i]=com.pose[i];  //  store the site class labels we get from last iteration
+
+///////////////////////////////////////////////////////////////////////////////////
+
+      if(com.ndata==1) fclose(fseq);
+         i=(com.ns*2-1)*sizeof(struct TREEN);
+      if((nodes=(struct TREEN*)malloc(i))==NULL) 
+         error2("oom nodes");
+
+      if(com.ngene>1 && com.aaDist>=FIT1)  /* because of pcodon0[] */
+         { error2("ngene for fitness models"); }
+
+      pmodel=(com.seqtype==CODONseq?NSbranchmodels[com.model]:aamodels[com.model]);
+      fprintf(fout,"%s (in %s)  ",seqtypestr[com.seqtype-1],VerStr);
+      fprintf(fout,"  %s   Model: %s ",com.seqf,pmodel);
+      if(com.clock) fprintf(fout," %s ",clockstr[com.clock]);
+      if(com.seqtype==CODONseq||com.model==FromCodon) 
+      {
+         if(com.fix_kappa) 
+            fprintf(fout, " kappa = %.3f fixed\n", com.kappa);
+         if(com.fix_omega) 
+            fprintf(fout, " omega = %.3f fixed\n", com.omega);
+      }
+      if(com.seqtype==AAseq && (com.model==Empirical||com.model==Empirical_F))
+         fprintf (fout, "(%s) ", com.daafile);
+      if(com.seqtype==AAseq&&com.nrate) 
+         fprintf(fout,"(nrate:%d) ",com.nrate);
+      if(com.alpha && com.rho) 
+         fprintf (fout, "Auto-");
+      if(com.alpha) 
+         fprintf (fout,"dGamma (ncatG=%d) ", com.ncatG);
+      if(com.ngene>1)
+         fprintf (fout, " (%d genes: %s)  ", com.ngene, Mgenestr[com.Mgene]);
+
+      if(com.alpha==0)  
+         com.nalpha=0;
+      else              
+         com.nalpha=(com.nalpha?com.ngene:!com.fix_alpha);
+      if(com.Mgene==1) 
+         com.nalpha=!com.fix_alpha;
+      if(com.nalpha>1 && (!com.alpha || com.ngene==1 || com.fix_alpha))
+         error2("Malpha");
+      if(com.nalpha>1 && com.rho) 
+         error2("Malpha or rho");
+      if(com.nalpha>1) 
+         fprintf (fout,"(%d gamma)", com.nalpha);
+     
+      if(com.Mgene && com.ngene==1) 
+         error2("Mgene for one gene.");
+      if(com.seqtype==CODONseq) 
+      {
+         fprintf (fout, "\nCodon frequencies: %s\n", codonfreqs[com.codonf]);
+         if(com.alpha) 
+            fputs("Warning: Gamma model for codons.  See documentation.",fout);
+      }
+      if((com.seqtype==CODONseq||com.model==FromCodon)&&(com.aaDist && com.aaDist<10 && com.aaDist!=AAClasses))
+         fprintf(fout,"%s, %s\n",com.daafile,(com.aaDist>0?"geometric":"linear"));
+
+      if(com.NSsites) 
+      {
+         fprintf(fout,"Site-class models: ");
+         if (nnsmodels==1) 
+         {
+            fprintf(fout," %s",NSsitesmodels[com.NSsites]);
+            if(com.NSsites>=NSdiscrete)
+               fprintf(fout," (%d categories)",com.ncatG);
+         }
+         if(com.nparK) 
+            fprintf(fout," & HMM");
+         FPN(fout);
+         if(com.aaDist)
+            fprintf(fout,"\nFitness models: aaDist: %d\n",com.aaDist);
+      }
+      com.sspace=max2(800000,3*com.ncode*com.ncode*(int)sizeof(double));
+      if(com.NSsites)
+         com.sspace=max2(com.sspace,2*com.ncode*com.ncode+4*com.npatt)*(int)sizeof(double);
+      k=com.ns*(com.ns-1)/2;
+
+      if((com.space=(double*)realloc(com.space,com.sspace))==NULL) 
+      {
+         printf("\nfailed to get %d bytes for space", com.sspace);
+         error2("oom space");
+      }
+      SeqDistance=(double*)realloc(SeqDistance, k*sizeof(double));
+      ancestor=(int*)realloc(ancestor, k*sizeof(int));
+      if(SeqDistance==NULL||ancestor==NULL) 
+         error2("oom distance&ancestor");
+
+      FOR(i,k) 
+         SeqDistance[i]=-1;
+
+      if(com.seqtype==AAseq) 
+      {
+         Initialize (fout);
+         if (com.model==FromCodon /* ||com.aaDist==AAClasses */)
+            AA2Codonf(com.pi, com.fb61);  /* get codon freqs from aa freqs */ 
+      }
+      else 
+      {  /* codon sequences */
+         if(com.sspace<max2(com.ngene+1,com.ns)*(64+12+4)*(int)sizeof(double)) 
+         {
+            com.sspace=max2(com.ngene+1,com.ns)*(64+12+4)*sizeof(double);
+            if((com.space=(double*)realloc(com.space,com.sspace))==NULL)
+               error2("oom space for #c");
+         }
+         if (InitializeCodon(fout,com.space,global_time)) 
+            error2("giving up on stop codons");
+
+         if (global_time>1)
+         {
+            for (j=1;j<global_k+1;j++)
+            {
+               for (i=0;i<64;i++)
+                   fprintf(fparameter, "%f ", com.pi[64*j+i]); 
+               fprintf(fparameter, "\n"); 
+            }         
+         }
+
+         if(com.Mgene==3) 
+            FOR (i,com.ngene) 
+               xtoy(com.pi,com.piG[i],com.ncode);
+      }
+
+      if(com.seqtype==CODONseq)
+         DistanceMatNG86(fout,fpair[0],fpair[1],fpair[2],0);
+      else
+         DistanceMatAA(fout);
+      fflush(fout);
+
+      if(com.seqtype==AAseq && com.model==Poisson && !com.print) 
+         PatternJC69like (fout);
+      if(com.alpha || com.NSsites) 
+      {
+         s2=com.npatt*com.ncatG*sizeof(double);
+            if((com.fhK=(double*)realloc(com.fhK,s2))==NULL) 
+               error2("oom fhK");
+      }
+      if(com.runmode==-2 && com.Mgene!=1) 
+      {
+         if(com.seqtype==CODONseq) 
+            PairwiseCodon(fout,fpair[3],fpair[4],fpair[5],com.space);  
+         else
+            PairwiseAA(fout, fpair[0]);  
+      }
+      else 
+      {
+         if(!com.cleandata) 
+         {
+            sconP0=com.ns*com.ncode*com.npatt*sizeof(double);
+            com.conP0=(double*)malloc(sconP0);
+         }
+         com.sconP= 2 *com.ncode*com.npatt*sizeof(double);
+         /* com.sconP= (com.ns-1)*com.ncode*com.npatt*sizeof(double); */
+         com.conP=(double*)realloc(com.conP,com.sconP);
+
+         printf("\n%9ld bytes for distance",com.ns*(com.ns-1)/2*sizeof(double));
+         printf("\n%9d bytes for conP0\n%9d bytes for conP1\n",sconP0,com.sconP);
+         printf ("%9d bytes for fhK\n%9d bytes for space\n",s2,com.sspace);
+         if((!com.cleandata&&com.conP0==NULL) || com.conP==NULL)
+            error2("oom");
+
+         if (nnsmodels>1) 
+         {
+            for(insmodel=0; insmodel<nnsmodels; insmodel++) 
+            {
+               com.NSsites=nsmodels[insmodel];
+               if(com.NSsites<=NSpselection)  
+                  com.ncatG=com.NSsites+1;
+               else if (com.NSsites==NSdiscrete) 
+                  com.ncatG=3;
+               else if (com.NSsites==NSfreqs) 
+                  com.ncatG=5;
+               else if (com.NSsites==NSbetaw||com.NSsites==NS02normal) 
+                     com.ncatG=ncatG0+1;
+               else  
+                  com.ncatG=ncatG0;
+
+               com.nrate=com.nkappa=(com.hkyREV?5:!com.fix_kappa);
+               if(com.NSsites==0 || com.NSsites==NSbetaw)  
+                  com.nrate+=!com.fix_omega;
+               else if(com.NSsites==NSnneutral)
+                  com.nrate++;
+               else if(com.NSsites==NSpselection)
+                  com.nrate+=1+!com.fix_omega;
+               else if(com.NSsites==NSdiscrete)
+                  com.nrate+=com.ncatG;
+
+               printf("\n\nModel %d: %s\n",com.NSsites, NSsitesmodels[com.NSsites]);
+               fprintf(fout,"\n\nModel %d: %s",com.NSsites,NSsitesmodels[com.NSsites]);
+               fprintf(frst,"\n\nModel %d: %s",com.NSsites,NSsitesmodels[com.NSsites]);
+               fprintf(frub,"\n\nModel %d: %s",com.NSsites,NSsitesmodels[com.NSsites]);
+               if(com.NSsites) 
+                  fprintf(fout," (%d categories)",com.ncatG);
+               FPN(fout);
+
+#ifdef NSSITESBandits
+               com.fix_blength = (com.NSsites>0 ? 2 : -1);
+               if(com.NSsites>0) 
+                  strcpy(com.treef,"M0tree");
+#endif
+               Forestry(fout);
+
+               printf("\nTime used: %s\n", printtime(timestr));
+               fprintf(fout,"\nTime used: %s\n", printtime(timestr));
+            }
+#ifdef NSSITESBandits
+            fprintf(frst1, "\t%s\n", printtime(timestr));
+#endif
+         }
+
+         if (com.Mgene==1)        
+            MultipleGenes(fout, fpair, com.space);
+         else if (com.runmode==0) 
+            Forestry(fout);
+         else if (com.runmode==3) 
+            StepwiseAddition(fout, com.space);
+         else if (com.runmode>=4) 
+            Perturbation(fout,(com.runmode==4),com.space);
+         else                    
+            StarDecomposition(fout, com.space);
+
+      }
+      FPN(frst);  fflush(frst);  
+      FPN(frst1); fflush(frst1);
+      free(nodes);
+
+   }  /* for (idata) */
+
+////////////////////////////////////////////
+
+   if (global_time==0)   
+   {
+	   fprintf(fparameter, "we are in the global_time==0 part 8*8\n";
+       fprintf(fparameter, "global time is: %f \n", global_time);  //kathy adds
+       fprintf(fparameter, "\n Branch Lengths: ");
+
+       for (i=0;i<global_np;i++)
+          fprintf(fparameter, "%f ", global_y[i]); 
+       fprintf(fparameter, "\n lnL: -%f \n", global_lnL);    /* kathy adds */
+       fprintf(fparameter, "\n\n");
+   }
+
+   if (global_stop==0)
+   {
+      fprintf(frandom, " C:     ");
+      fprintf(frandom, "%f ", global_c); 
+      for (i=0;i<global_k-1;i++)
+         fprintf(frandom, "%f ", global_c0[i]*global_c);   
+      fprintf(frandom, "\n Omega: ");
+      for (i=0;i<global_k;i++)
+         fprintf(frandom, "%f ", global_omega0[i]);
+      fprintf(frandom, "\n Kappa: ");
+      for (i=0;i<global_k;i++)
+         fprintf(frandom, "%f ", global_kappa0[i]);
+      fprintf(frandom, "\n lnL: -%f ", global_lnLk[global_iteration]); 
+      fprintf(frandom, "\n prior: ");
+      for (i=0;i<global_k;i++)
+         fprintf(frandom, "%f ", global_Pi[i]/com.ls); 
+      fprintf(frandom, "\n accuracy %d , %d , %d \n partition ", global_rate[0], global_rate[1], global_rate[2]);
+      for (global_ig=0;global_ig<global_k;global_ig++)
+         fprintf(frandom, "%d ", global_Pi1[global_ig]);
+      fprintf(frandom, "\n count %d iteration %d \n", global_count, global_iteration);
+      fprintf(frandom, "Pi:\n");
+      for (i=0;i<global_k;i++)
+      {
+         FOR(k,64) 
+         {
+           fprintf(frandom,"%12.8f",com.piG[i][k]);  /*,GeneticCode[com.icode][k]==-1?0: I moved this from in front of com.piG  kathy*/
+           if((k+1)%4==0) 
+              FPN(frandom); 
+         }
+         FPN(frandom);
+      }
+
+   }
+
+   if (global_time>0)// && global_stop>1)   
+   {
+      for (i=0;i<global_k-1;i++)
+         global_c0[i]=global_y[global_np-global_k*3+i+1];
+      for (i=0;i<global_k;i++)
+         global_omega0[i]=global_y[global_np-global_k*2+2*i+1];
+      for (i=0;i<global_k;i++)
+         global_kappa0[i]=global_y[global_np-global_k*2+2*i];
+  
+      fprintf(fparameter, "we are in the if global_time>0 statement ***\n");
+      fprintf(fparameter, "global time is: %f \n", global_time);  //kathy adds
+   
+      fprintf(fparameter, "\n C:     ");
+      fprintf(fparameter, "%f ", global_c); 
+      for (i=0;i<global_k-1;i++)
+         fprintf(fparameter, "%f ", global_c0[i]*global_c); 
+      fprintf(fparameter, "\n Omega: ");
+      for (i=0;i<global_k;i++)
+         fprintf(fparameter, "%f ", global_omega0[i]);
+      fprintf(fparameter, "\n Kappa: ");
+      for (i=0;i<global_k;i++)
+         fprintf(fparameter, "%f ", global_kappa0[i]);
+      fprintf(fparameter, "\n lnL: -%f \n", global_lnLk[global_time]); 
+      printf("\n count %d \n", global_count);
+
+      for (j=0;j<global_k;j++)
+      {
+         global_Pi1[j]=0;
+         for (i=0;i<com.ls;i++)
+         {
+            if (global_site[2][i]==j)
+               global_Pi1[j]=global_Pi1[j]+1;
+         }
+      }
+
+      for(j=0; j<com.npatt; j++)
+        for(global_ig=0; global_ig<global_k; global_ig++)
+            global_z[global_ig][j]=global_posterior[global_ig][global_pose[0][j]];
+         for (j=0;j<global_k;j++)
+         {
+            global_Pi[j]=0;
+            for (i=0;i<com.npatt;i++)
+               global_Pi[j]=global_Pi[j]+global_z[j][i]*com.fpatt[i];
+            fprintf(fparameter, "%f ", global_Pi[j]/1000);           
+         }
+         fprintf(fparameter, "\n");
+  }
+
+  fclose(frst);  fclose(frub);  fclose(flnf);
+//////////////////////////////////////////////////////
+if (global_k==2)
+{
+   global_rate[0]=0;
+
+   for (i=0;i<900;i++)
+      if (global_site[2][i]==0)
+        global_rate[0]=global_rate[0]+1;
+
+   global_rate[1]=0;
+
+   for (i=900;i<1000;i++)
+      if (global_site[2][i]==1)
+         global_rate[1]=global_rate[1]+1;
+}
+if (global_k==3)
+{
+   global_rate[0]=0;
+   for (i=0;i<700;i++)
+   if (global_site[2][i]==0)
+   global_rate[0]=global_rate[0]+1;
+   global_rate[1]=0;
+   for (i=700;i<900;i++)
+   if (global_site[2][i]==1)
+   global_rate[1]=global_rate[1]+1;
+   global_rate[2]=0;
+   for (i=900;i<1000;i++)
+   if (global_site[2][i]==2)
+   global_rate[2]=global_rate[2]+1;
+}
+   
+   if (global_time>0)
+   {
+   fprintf(fparameter, " accuracy %d , %d , %d\n partition ", global_rate[0], global_rate[1], global_rate[2]);
+   for (global_ig=0;global_ig<global_k;global_ig++)
+   fprintf(fparameter, "%d ", global_Pi1[global_ig]);
+   fprintf(fparameter, "\n count %d time %d \n\n", global_count, global_time);
+   }
+//////////////////////////////////////////////////////
+   if (global_time>1)
+   {
+      for (global_ig=0;global_ig<global_k;global_ig++)
+      {
+          for (i=0;i<com.npatt;i++)
+          fprintf(fgap, "%f ", global_z[global_ig][i]);
+          fprintf(fgap, "\n");
+      }
+      for (global_ig=0;global_ig<global_k;global_ig++)
+      {
+          for (i=0;i<com.ls;i++)
+          fprintf(fgap, "%f ", global_posterior[global_ig][i]);
+          fprintf(fgap, "\n");
+      }
+   }
+
+   if (global_time==-1)
+   {
+   fprintf(fparameter, "global time is: %f \n", global_time);  //kathy adds
+
+   fprintf(frandom, "C:     ");
+   fprintf(frandom, "%f ", global_c); 
+
+   for (i=0;i<global_k-1;i++)
+   fprintf(frandom, "%f ", global_c0[i]*global_c);   
+
+   fprintf(frandom, "\n Omega: ");
+   for (i=0;i<global_k;i++)
+   fprintf(frandom, "%f ", global_omega0[i]);
+
+   fprintf(frandom, "\n Kappa: ");
+   for (i=0;i<global_k;i++)
+   fprintf(frandom, "%f ", global_kappa0[i]);
+
+   fprintf(frandom, "\n lnL: -%f ", global_lnLk[global_time]);   
+   fprintf(frandom, "\n prior: ");
+   for (i=0;i<global_k;i++)
+   fprintf(frandom, "%f ", global_Pi[i]/com.ls);
+   if (global_k==3)
+   fprintf(frandom, " accuracy %d , %d , %d\n partition ", global_rate[0], global_rate[1], global_rate[2]);
+   if (global_k==2)
+   fprintf(frandom, " accuracy %d , %d\n partition ", global_rate[0], global_rate[1]);
+   for (global_ig=0;global_ig<global_k;global_ig++)
+   fprintf(frandom, "%d ", global_Pi1[global_ig]);
+   fprintf(frandom, "\n count %d time %d \n\n", global_count, global_time);
+   }
+   if (global_stop==0)
+   {
+       global_time=1000;
+   }
+} //for global_time
+
+   for (i=0;i<com.ls;i++)
+   fprintf(frandom, "%d ", global_site[1][i]+1);
+   fprintf(frandom, "\n");
+
+for (global_ig=0;global_ig<global_k;global_ig++)
+{
+   for (j=0;j<com.ls;j++)
+      for (i=0;i<com.npatt;i++)
+         if(global_site[0][j]==i) 
+            fprintf(fgap, "%f ", global_like[global_ig][i]);
+   fprintf(fgap, "\n");
+}
+
+   fclose(frandom); fclose(fgap) ;fclose(fpower); fclose(fparameter);
+/////////////////////////////////////////////
+
+   k=0;
+   if(com.seqtype==1) k=(com.runmode==-2?6:3);
+   else if (com.runmode==-2) k=1;
+   FOR(i,k) fclose(fpair[i]);
+   if(com.ndata>1 && fseq) fclose(fseq);    
+   if(finitials)  fclose(finitials);
+   fclose(fout);
+   FreeMemPUVR();
+   free(com.pose);
+   FOR(i,com.ns) free(com.z[i]);
+
+   printf("\nTime used: %s\n", printtime(timestr));
+
+   return (0);
+}
+
+
+
+int Forestry (FILE *fout)
+{
+   static int times=0;
+   FILE *ftree, *frate=NULL;
+   int  status=0, i,j=0,k, itree, ntree, np, iteration=1;
+   int pauptree=0, haslength;
+   double x[NP],xb[NP][2], xcom[NP-NBRANCH], lnL=0,lnL0=0, e=1e-6,tl=0;
+   double *var=NULL, nchange=-1;
+#ifdef NSSITESBandits
+   FILE *fM0tree;
+#endif
+
+   if ((ftree=fopen(com.treef,"r"))==NULL) {
+      printf("\ntree file %s not found.\n", com.treef);
+      exit(-1);
+   }
+   GetTreeFileType(ftree, &ntree, &pauptree, 0);
+   if (com.alpha)
+      frate=(FILE*)gfopen(ratef,"w");
+   if (ntree>10 && com.print) puts("\nlarge lnf file");
+   flnf=gfopen("lnf","w+");
+   fprintf(flnf,"%6d %6d %6d\n", ntree, com.ls, com.npatt);
+
+   if(com.seqtype==1 && com.aaDist>=FIT1) {
+      xtoy(com.pi,pcodon0,64);
+      zero(paa0,20);
+      FOR(i,com.ncode) paa0[GeneticCode[com.icode][FROM61[i]]]+=pcodon0[i];
+      pcodonClass=(double*)malloc(com.ncatG*64*sizeof(double));
+      if(pcodonClass==NULL) error2("oom pcodonClass");
+   }
+   if(!com.cleandata) InitConditionalPNode();
+
+   for(itree=0; ntree==-1||itree<ntree; itree++,iteration=1) {
+      if((pauptree && PaupTreeRubbish(ftree)) || 
+         ReadaTreeN(ftree,&haslength, &i,0,1))
+            { puts("end of tree file."); break; }
+      printf("\nTREE # %2d\n", itree+1);
+      fprintf(fout,"\n\nTREE # %2d:  ", itree+1);
+      fprintf(flnf,"\n\n%2d\n", itree+1);
+      if(com.print) fprintf (frst,"\n\nTREE # %2d\n", itree+1);
+      fprintf(frub,"\n\nTREE #%2d\n", itree+1);
+
+      if (com.fix_blength==2 && !haslength) error2("no branch lengths in tree");
+      if (com.fix_blength>0 && !haslength) com.fix_blength=0;
+      if (times++==0 && com.fix_blength>0 && haslength) {
+         if(com.clock) puts("\nBranch lengths in tree are ignored");
+         else {
+            if(com.fix_blength==2) puts("\nBranch lengths in tree are fixed.");
+            else if(com.fix_blength==1) puts("\nBranch lengths in tree used as initials.");
+            if(com.fix_blength==1) {
+               FOR(i,tree.nnode) 
+                  if((x[nodes[i].ibranch]=nodes[i].branch)<0) 
+                     x[nodes[i].ibranch]=1e-5;
+            }
+         }
+      }
+      LASTROUND=0;
+      if(com.cleandata) nchange=MPScore(com.space);
+      if(com.ns<40) { OutaTreeN(F0,0,0); printf("   MP score: %.0f",nchange); }
+      OutaTreeN(fout,0,0); fprintf(fout,"   MP score: %.0f",nchange);
+
+      if(!com.clock && nodes[tree.root].nson<=2 && com.ns>2) {
+         puts("\nThis is a rooted tree, without clock.  Check.");
+         fputs("\nThis is a rooted tree.  Please check!",fout);
+      }
+      fflush(flnf);
+      GetInitials(x, &i);
+      if(i==-1) iteration=0;
+      if((np=com.np)>NP || np-com.ntime>NP-NBRANCH) error2("raise NP");
+      if((i=spaceming2(np))>com.sspace) {
+         com.sspace=i;
+         printf ("\nspace adjusted to %9d bytes\n",com.sspace);
+         if((com.space=(double*)realloc(com.space,com.sspace))==NULL) {
+            printf("\ntrying to get %d bytes for ming2", com.sspace);
+            error2("oom space");
+         }
+      }
+      printf("\nntime & nrate & np:%6d%6d%6d\n",com.ntime,com.nrate,com.np);
+      if(itree && !finitials) for(i=0;i<np-com.ntime;i++) x[com.ntime+i]=xcom[i];
+
+      if(iteration && np) {
+         SetxBound(np, xb);
+         SetxInitials (np, x, xb); /* start within the feasible region */
+      }
+      PointconPnodes ();
+
+      lnL = com.plfun (x,np);
+
+      if(noisy) 
+      {
+         printf("\nnp =%6d", np);
+         if(noisy>2 && np<100) matout(F0,x,1,np);
+         printf("\nlnL0 = %12.6f\n",-lnL);
+      }
+
+//////////////////////////////////////////////////////////////////
+      global_np=np;
+      if (global_time==0)
+      global_np0=np;
+
+   fprintf(fparameter, "np %d \n", np);
+
+      for (i=0;i<com.ls;i++)
+      global_site[0][i]=com.pose[i];
+
+      for (i=0;i<com.npatt;i++)
+      {
+         for (j=0;j<com.ls;j++)
+         {
+             if(com.pose[j]==i) 
+             {
+             global_pose[0][i]=j;
+             }
+         }
+      }
+
+   for(j=0; j<com.npatt; j++)
+       for(global_ig=0; global_ig<global_k; global_ig++)
+           global_z[global_ig][j]=global_posterior[global_ig][global_pose[0][j]];
+
+
+      for (i=0;i<com.ls;i++)
+      global_pose[1][i]=global_site[1][global_pose[0][i]];
+
+      if (global_time==1)
+      {
+         if (global_control[4]==0)
+         {
+            for (i=0;i<global_np-global_k*3+1;i++) x[i]=global_y[i];
+            for (i=0;i<global_k;i++)    
+            {
+               x[global_np-global_k*2+2*i]=global_y[global_np0-2*global_k];
+               x[global_np-global_k*2+2*i+1]=global_y[global_np0-global_k+i];
+               if (x[global_np-global_k*2+2*i+1]>10)
+               x[global_np-global_k*2+2*i+1]=10;
+               if (x[global_np-global_k*2+2*i+1]<0.001)
+               x[global_np-global_k*2+2*i+1]=0.001;
+            }
+         }
+         else
+         for (i=0;i<global_np;i++) x[i]=global_y[i];
+      }
+
+      if (global_time>1)
+      for (i=0;i<global_np;i++) x[i]=global_y[i];
+
+///////////////////////////////////////////////////////////////////
+
+      if(iteration && np && global_control[0]) 
+      {
+         printf("\n wellcome to LiBaC %d\n", global_control[4]);
+         
+         if (global_time==0)          // obtain branch lengths from M0   
+         {
+            if (global_control[4]==0)
+            {
+                for (i=0;i<global_k-1;i++) 
+                x[np+1-2*global_k+i]=1.0000/global_k;
+                j = ming2c(noisy>2?frub:NULL,&lnL,com.plfun,NULL,x,xb, com.space,e,np, global_k, com.NSsites);
+            }
+            else
+                j = ming2(noisy>2?frub:NULL,&lnL,com.plfun,NULL,x,xb, com.space,e,np);
+         }
+
+         if (global_time==1)          // partition sites by omega
+         j = ming2all(noisy>2?frub:NULL,&lnL,com.plfun,NULL,x,xb, com.space,e,np, global_k);
+
+        if (global_time>1)
+        {         
+        if (global_control[2])
+        {
+         if (global_time>1  && global_stop>0)           // EM iteration  
+         {
+            global_c1[0]=0.001;
+            global_c1[1]=0.999;
+
+            for (global_random=1;global_random<6;global_random++)
+            {
+                global_c=(global_c1[0]+global_c1[1])/2;
+                global_c2[0]=global_c-0.01;
+                global_c2[1]=global_c+0.01;
+
+                for (i=0;i<global_np-global_k*3+1;i++) x[i]=global_c2[0]*global_t[i];
+                if (global_control[3])
+                j = ming2t(noisy>2?frub:NULL,&lnL,lfun1,NULL,x,xb, com.space,e,np, global_k);
+                else
+                j = ming2t(noisy>2?frub:NULL,&lnL,com.plfun,NULL,x,xb, com.space,e,np, global_k);
+                global_c_lnL[0]=lnL;
+
+                for (i=0;i<global_np-global_k*3+1;i++) x[i]=global_c2[1]*global_t[i];
+                if (global_control[3])
+                j = ming2t(noisy>2?frub:NULL,&lnL,lfun1,NULL,x,xb, com.space,e,np, global_k);
+                else
+                j = ming2t(noisy>2?frub:NULL,&lnL,com.plfun,NULL,x,xb, com.space,e,np, global_k);
+                global_c_lnL[1]=lnL;
+
+                if (global_c_lnL[0]>global_c_lnL[1])  global_c1[0]=global_c;
+                else global_c1[1]=global_c;
+            }
+            global_c=(global_c1[0]+global_c1[1])/2;
+            for (i=0;i<global_np-global_k*3+1;i++) x[i]=global_c*global_t[i];
+            if (global_control[3])
+            j = ming2t(noisy>2?frub:NULL,&lnL,lfun1,NULL,x,xb, com.space,e,np, global_k);
+            else
+            j = ming2t(noisy>2?frub:NULL,&lnL,com.plfun,NULL,x,xb, com.space,e,np, global_k);
+         }
+
+         if (global_time>1  && global_stop==0)           // EM iteration  
+         {
+            if (global_control[3])
+            j = ming2(noisy>2?frub:NULL,&lnL,lfun1,NULL,x,xb, com.space,e,np);
+            else
+            j = ming2(noisy>2?frub:NULL,&lnL,com.plfun,NULL,x,xb, com.space,e,np);
+         }
+        }
+        else
+        {
+           if (global_control[3])
+           j = ming2(noisy>2?frub:NULL,&lnL,lfun1,NULL,x,xb, com.space,e,np); 
+           else
+           j = ming2(noisy>2?frub:NULL,&lnL,com.plfun,NULL,x,xb, com.space,e,np);
+        }  
+        }   
+         
+         if (j==-1 || lnL<=0 || lnL>1e7) status=-1;  else status=0;
+         if(status) fprintf(fout,"\ncheck convergence..");
+      }
+
+      printf("Out..\nlnL  = %12.6f\n",-lnL);
+
+      printf("%d lfun, %d eigenQc, %d P(t)\n",NFunCall, NEigenQ, NPMatUVRoot);
+      if (itree==0)
+         { lnL0=lnL;  FOR(i,np-com.ntime) xcom[i]=x[com.ntime+i]; }
+      else if (!j)
+         for (i=0; i<np-com.ntime; i++) xcom[i]=xcom[i]*.2+x[com.ntime+i]*0.8;
+
+      if(!LASTROUND && (com.NSsites==NSpselection||com.NSsites==NSdiscrete
+        ||com.NSsites==NSfreqs||com.NSsites==NS3normal)) {
+         /* transform back to p0, p1,... */
+         k=com.ntime+com.nrgene+com.nkappa;
+
+         if(com.nparK) {   /* HMM model for w */
+            k+=com.ncatG;
+            for(i=0; i<com.ncatG; i++,k+=com.ncatG-1) 
+               f_and_x(x+k,x+k,com.ncatG,0,0);
+         }
+         else {
+            j = (com.NSsites==NS3normal ? 3 : com.ncatG);
+            if(com.model && com.model<=NSbranch2) j=3;
+            f_and_x(x+k,x+k,j,0,0);
+         }
+      }
+      LASTROUND=1;
+      if(com.NSsites==NSdiscrete && com.aaDist==0 && com.model==0)
+         sortwM3(x);
+      if(com.clock) { /* move times into x[] */
+         for(i=0,j=!nodes[tree.root].fossil; i<tree.nnode; i++) 
+            if(i!=tree.root && nodes[i].nson && !nodes[i].fossil) 
+               x[j++]=nodes[i].age;
+      }
+
+      fprintf (fout,"\nlnL(ntime:%3d  np:%3d):%14.6f%+14.6f\n",
+         com.ntime, np, -lnL, -lnL+lnL0);
+      if(com.fix_blength<2) { OutaTreeB(fout);  FPN(fout); }
+      FOR (i,np) fprintf(fout," %8.5f",x[i]); FPN(fout);   fflush(fout);
+      if (com.getSE) {
+         if(np>20) puts("Calculating SE's");
+         if(com.sspace<np*(np+1)*(int)sizeof(double)) {
+            com.sspace=np*(np+1)*sizeof(double);
+            if((com.space=(double*)realloc(com.space,com.sspace))==NULL)
+               error2("oom space for SE");
+         }
+         var=com.space+np;
+
+         Hessian (np, x, lnL, com.space, var, com.plfun, var+np*np);
+         matinv (var, np, np, var+np*np);
+         fprintf(fout,"SEs for parameters:\n");
+         FOR(i,np) fprintf(fout," %8.5f",(var[i*np+i]>0.?sqrt(var[i*np+i]):-1));
+         FPN(fout);
+
+         if (com.getSE==2) matout2(fout, var, np, np, 15, 10);
+
+      }
+      if(com.seqtype==1 && com.ntime && com.clock==0)
+         fprintf(fout,"Note: Branch length is defined as number of nucleotide substitutions per codon (not per neucleotide site).\n");
+
+      /* if (com.clock) SetBranch (x); */
+      if(com.clock && com.nbtype>1)
+         fputs("\nWarning: branch rates are not yet applied in tree length and branch lengths",fout);
+      if(AbsoluteRate)
+         fputs("\nNote: mutation rate is not applied to tree length.  Tree has times, for TreeView",fout);
+      for(i=0,tl=0;i<tree.nnode;i++) if(i!=tree.root) tl+=nodes[i].branch;
+      fprintf(fout,"\ntree length = %9.5f%s\n",tl,com.ngene>1?" (1st gene)":"");
+
+
+      if(com.readpattf)  
+         { FPN(fout); OutaTreeN(fout,0,1); FPN(fout); }
+      else {
+         FPN(fout); OutaTreeN(fout,0,1);  FPN(fout);
+         FPN(fout); OutaTreeN(fout,1,1);  FPN(fout);
+      }
+      if(com.np-com.ntime||com.clock) DetailOutput(fout,x,var);
+      if (com.seqtype==AAseq && com.model>=com.model>=REVaa_0)
+         EigenQaa(fout, Root, U, V, x+com.ntime+com.nrgene);
+
+      if (com.NSsites && !com.readpattf)  
+      {
+         lfunNSsites_rate(frst,x,np);
+      }
+
+      if (com.print) {
+         if(com.rho==0 && com.nparK==0 && com.clock<=1)
+            AncestralSeqs(frst,x);
+         if(!com.NSsites && com.plfun!=lfun)
+            lfunRates(frate,x,np);
+      }
+      com.print-=9;
+      lnL=com.plfun(x,np);
+      com.print+=9;
+   }     /* for(itree) */
+
+//////////////////////////////////
+if (global_time==0)
+for (i=0;i<global_np;i++) global_t[i]=x[i];
+for (i=0;i<global_np;i++) global_y[i]=x[i];
+
+com.print-=99;
+if (global_time>1)
+{
+    if (global_control[3])
+    lnL=lfun1(x,np);
+    else
+    lnL=com.plfun(x,np);
+}
+else
+lnL=com.plfun(x,np);
+com.print+=99;
+global_lnLk[global_time]=lnL;
+
+com.print-=99;
+if (global_time>1)
+{
+    if (global_control[3])
+    lnL=lfun2(x,np);
+    else
+    lnL=com.plfun(x,np);
+}
+else
+lnL=com.plfun(x,np);
+com.print+=99;
+global_lnL=lnL;
+
+if (global_time>3)
+{
+    if (global_lnLk[global_time]<-global_lnL_max)
+    global_lnL_max=-global_lnLk[global_time];
+    else
+    {
+        global_iteration=global_time-1;
+        global_stop=0;
+    }
+}
+
+if (global_time>0)
+{
+
+      for (i=0;i<20;i++)
+      global_posG[i]=com.posG[i];
+
+for(global_ig=0;global_ig<global_k;global_ig++)
+{
+      fprintf(flnf,"\n\n all sites from group %d \n", global_ig+1);
+
+      for (i=0;i<20;i++)
+      com.posG[i]=global_posG[i];
+
+      for (i=global_ig+1;i<global_k;i++)
+      com.posG[i]=com.posG[global_k];
+      for (i=1;i<global_ig+1;i++)
+      com.posG[i]=com.posG[0];      
+
+      com.print-=99;
+      lnL=com.plfun(x,np);
+      com.print+=99;
+}
+
+      if (global_time>1)
+      {
+      for (global_ig=0;global_ig<global_k;global_ig++)
+          for (i=0;i<com.npatt;i++)
+          {
+              global_like1[global_ig][i]=global_like[global_ig][i];
+              global_like[global_ig][i]=global_like[global_ig][i]+log(global_Pi[global_ig]);
+          }
+      }
+
+      for (i=0;i<com.npatt;i++)
+      {
+          global_sum=0;
+          for (global_ig=0;global_ig<global_k;global_ig++)
+          global_sum=global_sum+exp(global_like[global_ig][i]-global_like[0][i]);
+          for (global_ig=0;global_ig<global_k;global_ig++)
+          global_posterior2[global_ig][i]=exp(global_like[global_ig][i]-global_like[0][i])/global_sum;
+      }
+      
+   for (i=0;i<com.npatt;i++)
+   {
+      global_pose[2][i]=global_pose[1][i];
+      if (global_time==1)
+      global_temp0=-100000;
+      else
+      global_temp0=global_like[global_pose[1][i]][i];
+      for (global_ig=0;global_ig<global_k;global_ig++)
+      {
+          if (global_like[global_ig][i]>global_temp0)
+          {
+             global_temp0=global_like[global_ig][i];
+             global_pose[2][i]=global_ig;
+          }
+      }
+   }
+
+   for (i=0;i<com.npatt;i++)
+   {
+      for (j=0;j<com.ls;j++)
+      {
+         if(global_site[0][j]==i) 
+         {
+            global_site[2][j]=global_pose[2][i];
+            for (global_ig=0;global_ig<global_k;global_ig++)
+              global_posterior[global_ig][j]=global_posterior2[global_ig][i];
+            global_posterior1[global_ig][j]=global_posterior2[global_ig][i];
+         }
+      }
+   }
+
+      for (global_ig=0;global_ig<global_k;global_ig++)
+          for (j=0;j<global_k;j++)
+              global_Pi1[10+10*global_ig+j]=0;
+   global_count=0;
+   for (i=0;i<com.ls;i++)
+   {
+      if (global_site[2][i]!=global_site[1][i])
+         global_count=global_count+1;
+      for (global_ig=0;global_ig<global_k;global_ig++)
+      {
+          for (j=0;j<global_k;j++)
+          {
+              if (global_site[1][i]==global_ig & global_site[2][i]==j)
+              global_Pi1[10+10*global_ig+j]=global_Pi1[10+10*global_ig+j]+1;
+          }
+      }
+   }
+
+} //end of if (global_time>0)
+/////////////////////////////////
